@@ -10,16 +10,25 @@ from pandas import DataFrame, Series
 from pandas_datareader import data, wb
 from urllib.request import urlopen
 
+# ì£¼ì‹ëª… ì›¹ì…ë ¥
+stock_name = 'LG'
 
-# À¥ ÆäÀÌÁö ÅëÇØ¼­ Á¾¸ñ ÄÚµå ÀÔ·Â ¹Ş±â
-stockItem = '005930' 
+# ì£¼ì‹ ë“±ë¡ì¢…ëª© ì½”ë“œí™•ì¸
+stock_reg_file = './data/total.xls'
+stock_reg_df =pd.read_excel(stock_reg_file)
+stock_reg_info = stock_reg_df[[stock_reg_df.columns[1], stock_reg_df.columns[2], stock_reg_df.columns[4]]]
 
-# ±¸±Û ÆÄÀÌ³½½º¿¡¼­ ÇØ´ç Á¾¸ñ Á¤º¸ ¹Ş±â
+code = stock_reg_info[stock_reg_info['ê¸°ì—…ëª…'] == stock_name]['ì¢…ëª©ì½”ë“œ'].values[0]
+stockItem = str(code).zfill(6)
+print(stock_name, stockItem)
+#stockItem = '005930'
+
+# êµ¬ê¸€ íŒŒì´ë‚¸ìŠ¤ì—ì„œ í•´ë‹¹ ì¢…ëª© ì •ë³´ ë°›ê¸°
 columns = ['Open', 'High', 'Low', 'Close', 'Volume']
 start_date = datetime(2003, 1, 1)
 
 df = data.DataReader(
-    "KRX:005930", 
+    "KRX" + ":" + stockItem, 
     "google", 
     start_date,
     #datetime(2003, 1, 3) #TEST
@@ -32,7 +41,7 @@ d = df.index[-1]
 end_date = datetime.date(d.year, d.month, d.day) + datetime.timedelta(days=1)
 today = datetime.date.today()
 
-# ºÎÁ·ÇÑ µ¥ÀÌÅÍ ³¯Â¥ ¹üÀ§ ±¸ÇÏ±â
+# ë¶€ì¡±í•œ ë°ì´í„° ë‚ ì§œ ë²”ìœ„ êµ¬í•˜ê¸°
 delta = today - end_date
 need_web_scrap = True
 
@@ -42,13 +51,13 @@ if delta.days == 0 :
 else:
     delta_dates = pd.date_range(end_date.strftime('%Y/%m/%d'), periods=delta.days)
 
-	# ½ºÅ©·¦ÇÎ Á¤º¸ ´ãÀ» DataFrame »ı¼º
+# ìŠ¤í¬ë©í•‘ ì •ë³´ ë‹´ì„ DataFrame ìƒì„±
 add_data = np.empty((len(delta_dates), len(columns)))
-add_data[:] = np.NAN # NaN °ªÀ¸·Î ÃÊ±âÈ­
+add_data[:] = np.NAN # NaN ê°’ìœ¼ë¡œ ì´ˆê¸°í™”
 add_df = DataFrame(add_data, index=delta_dates ,columns=columns)
 
 if(need_web_scrap):
-    # ³×ÀÌ¹ö¿¡¼­ ºÎÁ·ÇÑ ³¯Â¥¿¡ ÇØ´çÇÏ´Â Á¤º¸ Web ½ºÅ©·¦ÇÎ
+    # ë„¤ì´ë²„ì—ì„œ ë¶€ì¡±í•œ ë‚ ì§œì— í•´ë‹¹í•˜ëŠ” ì •ë³´ Web ìŠ¤í¬ë©í•‘
     url = 'http://finance.naver.com/item/sise_day.nhn?code='+ stockItem
     html = urlopen(url)  
     source = BeautifulSoup(html.read(), "html.parser")
@@ -59,7 +68,7 @@ if(need_web_scrap):
     mpNum = int(mp[0].a.get('href').split("page=")[1])
 
 
-    # ½ºÅ©·¦ÇÎ Á¤º¸ DataFrame Ãß°¡ÇÏ±â
+    # ìŠ¤í¬ë©í•‘ ì •ë³´ DataFrame ì¶”ê°€í•˜ê¸°
     stop_date = datetime.date(delta_dates[0].year, delta_dates[0].month, delta_dates[0].day).strftime('%Y.%m.%d')
 
     for page in range(1, mpNum+1):
@@ -96,9 +105,9 @@ if(need_web_scrap):
         if (status):
             break
 
-# NaN ÄÃ·³ »èÁ¦ ¹× ¿À¸§Â÷¼ø Á¤·Ä
+# NaN ì»¬ëŸ¼ ì‚­ì œ ë° ì˜¤ë¦„ì°¨ìˆœ ì •ë ¬
 add_df = add_df.dropna().sort_index()
 df = df.append(add_df)
 
-# csv ÆÄÀÏ ÀúÀå
-df.to_csv('./data/KRX_066570.csv')
+# csv íŒŒì¼ ì €ì¥
+df.to_csv('./data/KRX_' + stockItem + '.csv')
