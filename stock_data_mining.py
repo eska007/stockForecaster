@@ -1,8 +1,3 @@
-import pandas as pd
-import numpy as np
-import urllib
-import datetime, time
-
 from bs4 import BeautifulSoup
 from datetime import datetime
 from dateutil.parser import parse
@@ -10,69 +5,35 @@ from pandas import DataFrame, Series
 from pandas_datareader import data, wb
 from urllib.request import urlopen
 
-# 주식명 웹입력
-stock_name = 'LG'
+import time
+import numpy as np
+import os
+import pandas as pd
+import sys
+import urllib
 
-# 주식 등록종목 코드확인
-stock_reg_file = './data/total.xls'
-stock_reg_df =pd.read_excel(stock_reg_file)
-stock_reg_info = stock_reg_df[[stock_reg_df.columns[1], stock_reg_df.columns[2], stock_reg_df.columns[4]]]
-
-code = stock_reg_info[stock_reg_info['기업명'] == stock_name]['종목코드'].values[0]
-stockItem = str(code).zfill(6)
-print(stock_name, stockItem)
-#stockItem = '005930'
-
-# 구글 파이낸스에서 해당 종목 정보 받기
-columns = ['Open', 'High', 'Low', 'Close', 'Volume']
-start_date = datetime(2003, 1, 1)
-
-df = data.DataReader(
-    "KRX" + ":" + stockItem, 
-    "google", 
-    start_date,
-    #datetime(2003, 1, 3) #TEST
-    datetime.now()
-)
-
-import datetime, time
-
-d = df.index[-1]
-end_date = datetime.date(d.year, d.month, d.day) + datetime.timedelta(days=1)
-today = datetime.date.today()
-
-# 부족한 데이터 날짜 범위 구하기
-delta = today - end_date
-need_web_scrap = True
-
-if delta.days == 0 :
-    need_web_scrap = False
-    delta_dates = pd.date_range(end_date.strftime('%Y/%m/%d'), periods=1)
-else:
-    delta_dates = pd.date_range(end_date.strftime('%Y/%m/%d'), periods=delta.days)
-
-# 스크랩핑 정보 담을 DataFrame 생성
-add_data = np.empty((len(delta_dates), len(columns)))
-add_data[:] = np.NAN # NaN 값으로 초기화
-add_df = DataFrame(add_data, index=delta_dates ,columns=columns)
-
-if(need_web_scrap):
+def get_info_with_web_scrap(item, df, idx_date):
+    print("Get stock info using web scraping..")
     # 네이버에서 부족한 날짜에 해당하는 정보 Web 스크랩핑
-    url = 'http://finance.naver.com/item/sise_day.nhn?code='+ stockItem
+    url = 'http://finance.naver.com/item/sise_day.nhn?code='+ item
     html = urlopen(url)  
     source = BeautifulSoup(html.read(), "html.parser")
-
+    
     maxPage=source.find_all("table",align="center")
-
     mp = maxPage[0].find_all("td",class_="pgRR")
-    mpNum = int(mp[0].a.get('href').split("page=")[1])
-
-
+    
+    try:
+        mpNum = int(mp[0].a.get('href').split("page=")[1])
+    except:
+        mpNum = 1
+    
     # 스크랩핑 정보 DataFrame 추가하기
-    stop_date = datetime.date(delta_dates[0].year, delta_dates[0].month, delta_dates[0].day).strftime('%Y.%m.%d')
+    #print (idx_date)
+    import datetime
+    stop_date = datetime.date(idx_date[0].year, idx_date[0].month, idx_date[0].day).strftime('%Y.%m.%d')
 
     for page in range(1, mpNum+1):
-        url = 'http://finance.naver.com/item/sise_day.nhn?code=' + stockItem +'&page='+ str(page)
+        url = 'http://finance.naver.com/item/sise_day.nhn?code=' + item +'&page='+ str(page)
         html = urlopen(url)
         source = BeautifulSoup(html.read(), "html.parser")
         srlists=source.find_all("tr") 
@@ -90,24 +51,66 @@ if(need_web_scrap):
                     break
 
                 try:
-                    add_df.ix[date, columns[3]] = close
+                    df.ix[date, columns[3]] = close
                 except:
                     #add_df = add_df.drop(date, 0)
                     continue
 
                 x = srlists[i].find_all("td",class_="num")
-                add_df.ix[date, columns[0]] = x[2].text
-                add_df.ix[date, columns[1]] = x[3].text
-                add_df.ix[date, columns[2]] = x[4].text
-                add_df.ix[date, columns[4]] = x[5].text
+                df.ix[date, columns[0]] = x[2].text
+                df.ix[date, columns[1]] = x[3].text
+                df.ix[date, columns[2]] = x[4].text
+                df.ix[date, columns[4]] = x[5].text
                 #print(date, close)
 
         if (status):
             break
+    return df
 
-# NaN 컬럼 삭제 및 오름차순 정렬
-add_df = add_df.dropna().sort_index()
-df = df.append(add_df)
+def check_csv_file(cat, item):
+    if os.path.isdir("./data/csv"):
+        if os.path.isfile("./data/csv/" + cat + '_' + item + '.csv'):
+            return True
+    return False
 
-# csv 파일 저장
-df.to_csv('./data/KRX_' + stockItem + '.csv')
+def create_init_stock_info(df, category, num=10):
+    print("Start to create init stock data - " + category)
+    
+    start_date = datetime(1980, 1, 1)
+    
+    for i in range(num):
+        # 순서대로 종목 stock_item 가져오기
+        try:
+            code = str(df.ix[i]['종목코드']).zfill(6)
+
+        except:
+            print("ERROR - Unregisterd Stock!")
+            continue
+        
+        if check_csv_file(category, code):
+            print("Already exist: " + category + '_' + code + '.csv')
+            continue
+        
+        stock_item = str(code).zfill(6)
+        print(category, stock_item)
+        start_idx_dates = pd.date_range(start_date.strftime('%Y/%m/%d'), periods=1)
+        
+        init_data = np.empty((1, len(columns)))
+        init_data[:] = np.NAN # NaN 값으로 초기화
+        init_df = DataFrame(init_data, index=start_idx_dates ,columns=columns)
+        
+        get_df = get_info_with_web_scrap(stock_item, init_df, start_idx_dates)
+        get_df = get_df.dropna().sort_index()
+        get_df.to_csv('./data/csv/' + category + '_' + stock_item + '.csv')
+
+    print("Complete to create init stock data!")
+
+def init_stock_data():
+    df_kospi = pd.read_excel(stock_reg_kospi)
+    df_kosdaq = pd.read_excel(stock_reg_kosdaq)
+    
+    create_init_stock_info(df_kospi, "KRX", len(df_kospi))
+    create_init_stock_info(df_kosdaq, "KOSDAQ", len(df_kosdaq))
+
+# 전체 주식 데이터 생성 (최초 1회 수행)
+init_stock_data()
