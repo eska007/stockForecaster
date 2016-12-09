@@ -65,6 +65,7 @@ def get_info_with_web_scrap(item, df, idx_date):
 
         if (status):
             break
+    df.index.name = 'Date'
     return df
 
 def check_csv_file(cat, item):
