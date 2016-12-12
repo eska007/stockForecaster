@@ -85,7 +85,7 @@ def check_csv_file(cat, item):
 def create_stock_csv_file(df, category, num=10):
     print("Start to create init stock data - " + category)
     
-    start_date = datetime(1980, 1, 1)
+    start_date = dtdt(1980, 1, 1)
     
     for i in range(num):
         # 순서대로 종목 stock_item 가져오기
