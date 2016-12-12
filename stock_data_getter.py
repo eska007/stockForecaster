@@ -1,10 +1,11 @@
 from bs4 import BeautifulSoup
-from datetime import datetime
+from datetime import datetime as dtdt
 from dateutil.parser import parse
 from pandas import DataFrame, Series
 from pandas_datareader import data, wb
 from urllib.request import urlopen
 
+import datetime as dt
 import time
 import numpy as np
 import os
@@ -12,8 +13,14 @@ import pandas as pd
 import sys
 import urllib
 
+stock_reg_kospi = './data/KOSPI.xls'
+stock_reg_kosdaq = './data/KOSDAQ.xls'
+
+columns = ['Open', 'High', 'Low', 'Close', 'Volume']
+
 def get_info_with_web_scrap(item, df, idx_date):
     print("Get stock info using web scraping..")
+    
     # 네이버에서 부족한 날짜에 해당하는 정보 Web 스크랩핑
     url = 'http://finance.naver.com/item/sise_day.nhn?code='+ item
     html = urlopen(url)  
@@ -28,9 +35,7 @@ def get_info_with_web_scrap(item, df, idx_date):
         mpNum = 1
     
     # 스크랩핑 정보 DataFrame 추가하기
-    #print (idx_date)
-    import datetime
-    stop_date = datetime.date(idx_date[0].year, idx_date[0].month, idx_date[0].day).strftime('%Y.%m.%d')
+    stop_date = dt.date(idx_date[0].year, idx_date[0].month, idx_date[0].day).strftime('%Y.%m.%d')
 
     for page in range(1, mpNum+1):
         url = 'http://finance.naver.com/item/sise_day.nhn?code=' + item +'&page='+ str(page)
@@ -74,7 +79,7 @@ def check_csv_file(cat, item):
             return True
     return False
 
-def create_init_stock_info(df, category, num=10):
+def create_stock_csv_file(df, category, num=10):
     print("Start to create init stock data - " + category)
     
     start_date = datetime(1980, 1, 1)
@@ -106,12 +111,9 @@ def create_init_stock_info(df, category, num=10):
 
     print("Complete to create init stock data!")
 
-def init_stock_data():
-    df_kospi = pd.read_excel(stock_reg_kospi)
-    df_kosdaq = pd.read_excel(stock_reg_kosdaq)
-    
-    create_init_stock_info(df_kospi, "KRX", len(df_kospi))
-    create_init_stock_info(df_kosdaq, "KOSDAQ", len(df_kosdaq))
+def init_stock_data(df_kospi, df_kosdaq):  
+    create_stock_csv_file(df_kospi, "KRX", len(df_kospi))
+    create_stock_csv_file(df_kosdaq, "KOSDAQ", len(df_kosdaq))
 
 # 전체 주식 데이터 생성 (최초 1회 수행)
-init_stock_data()
+#init_stock_data(df_kospi, df_kosdaq)
