@@ -1,3 +1,6 @@
+#!/usr/local/bin/python
+#-*- coding: utf-8 -*-
+
 from bs4 import BeautifulSoup
 from datetime import datetime as dtdt
 from dateutil.parser import parse
