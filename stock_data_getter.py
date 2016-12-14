@@ -24,6 +24,21 @@ columns = ['Open', 'High', 'Low', 'Close', 'Volume']
 default_data = np.empty((1, len(columns)))
 default_data[:] = np.NAN
 
+def get_idx_today():
+    check_hour = dtdt.now().hour
+    check_min = dtdt.now().minute
+
+    print(str(check_hour) + ':' + str(check_min))
+
+    if check_hour == 15:
+        if (check_min > 30):
+            today = dt.date.today()
+    elif check_hour > 15:
+        today = dt.date.today()
+    else:
+        today = dt.date.today() - dt.timedelta(days=1)
+    return today
+
 def get_info_with_web_scrap(item, df, idx_date):
     print("Get stock info using web scraping..")
     
@@ -79,9 +94,17 @@ def get_info_with_web_scrap(item, df, idx_date):
     df.index.name = 'Date'
     return df
 
-def check_csv_file(cat, item):
+def get_gold_cross_info():
+    df = pd.read_csv('./data/csv/daily/gold_cross.csv', index_col="Date")
+    return df
+
+def get_deal_trend_info(category):
+    df = pd.read_csv('./data/csv/daily/' + category + '_deal_trend.csv', index_col='Date')
+    return df
+
+def check_csv_file(category, item):
     if os.path.isdir("./data/csv"):
-        if os.path.isfile("./data/csv/" + cat + '_' + item + '.csv'):
+        if os.path.isfile("./data/csv/" + category + '_' + item + '.csv'):
             return True
     return False
 
@@ -116,6 +139,109 @@ def create_stock_csv_file(df, category, num=10):
         get_df.to_csv('./data/csv/' + category + '_' + stock_item + '.csv')
 
     print("Complete to create init stock data!")
+
+def create_investor_deal_trend(category, num=0):
+    columns = ['Date', '개인', '외국인', '기관계',
+                '금융투자', '보험', '투신', '은행',
+                '기타금융기관', '연기금', '기타법인']
+
+    df = pd.DataFrame(default_data, columns=columns)
+
+    date = get_idx_today().strftime('%Y%m%d')
+    url = 'http://finance.naver.com/sise/investorDealTrendDay.nhn?bizdate=' + date + '&sosok='
+    if category == 'kospi':
+        url = url+'01'
+    else:
+        url = url+'02'
+
+    html = urlopen(url)
+    source = BeautifulSoup(html.read(), "html.parser")
+
+    s_table=source.find_all("table", class_="type_1")
+    s_td = s_table[0].find_all("td")
+
+    maxPage = source.find_all("table", align="center")
+    mp = maxPage[0].find_all("td",class_="pgRR")
+
+    try:
+        mpNum = int(mp[0].a.get('href').split("page=")[1])
+    except:
+        mpNum = 1
+
+    if num != 0:
+        mpNum = num
+
+    idx=0
+    for page in range(1, mpNum+1):
+        html = urlopen(url +'&page='+ str(page))
+        source = BeautifulSoup(html.read(), "html.parser")
+        srlists=source.find_all("tr")
+        isCheckNone = None
+
+        status = False
+        #print(idx)
+        for i in range(1,len(srlists)-1):
+            #endlist = srlists[i].find_all("td",class_="blank_09")[0].text
+            dealTrend = srlists[i].find_all("td")
+            num = len(dealTrend)
+            if (num-1) == i:
+                break
+
+            if (num == len(columns)):
+                for j in range(num):
+                    if j == 0:
+                        date = dealTrend[j].text.split('.')
+                        year = 2000 + int(date[0])
+                        mon =  int(date[1])
+                        day =  int(date[2])
+                        df.ix[idx, columns[j]] = dt.date(year, mon, day).strftime('%Y.%m.%d')
+                    else:
+                        df.ix[idx, columns[j]] = dealTrend[j].text
+                idx += 1
+
+            else:
+                continue
+    df.to_csv('./data/csv/daily/' + category + '_deal_trend.csv', index=False)
+    return df
+
+def create_gold_cross_items():
+    columns = ['Date', '종목코드', '현재가', '상승폭',
+               '등락률', '거래량', '시가', '고가',
+               ' 저가', 'PER', 'ROE']
+    df = pd.DataFrame(default_data, columns=columns)
+    date = get_idx_today().strftime('%Y.%m.%d')
+
+    url = 'http://finance.naver.com/sise/item_gold.nhn'
+    html = urlopen(url)
+    source = BeautifulSoup(html.read(), "html.parser")
+
+    s_table=source.find_all("table", class_="type_5")
+    s_td = s_table[0].find_all("td")
+    s_number = s_table[0].find_all("td", class_="number")
+
+    code = []
+    for td in s_td:
+        try:
+            code.append(td.a.get('href').split("code=")[1])
+        except:
+            continue
+
+    #default_data = np.empty((mp_num, len(columns)))
+    #default_data[:] = np.NAN
+
+    total_item_num = int(len(s_number) / 9)
+    print(total_item_num)
+    for i in range(total_item_num):
+        df.ix[i, columns[0]] = date
+        df.ix[i, columns[1]] = code[i]
+        if i == 0:
+            for j in range(len(columns)-2):
+                df.ix[i, columns[j+2]] = s_number[j].text.strip()
+        else:
+             for j in range(len(columns)-2):
+                df.ix[i, columns[j+2]] = s_number[(i*9)+j].text.strip()
+
+    df.to_csv('./data/csv/daily/gold_cross.csv', index=False)
 
 def init_stock_data(kospi, kosdaq):  
     create_stock_csv_file(kospi, "KRX", len(kospi))
@@ -165,6 +291,7 @@ def update_stock_data(item, kospi, kosdaq):
 
     print(str(check_hour) + ':' + str(check_min))
     market_closed = True
+
     if check_hour == 15:
         if (check_min > 30):
             today = dt.date.today()
@@ -216,5 +343,3 @@ def update_stock_data(item, kospi, kosdaq):
         df.to_csv(file_path+file_name)
         #else:
         #    df.to_csv(file_path+file_name, mode='a',header=True, index=True, index_label='Date')
-        
-
